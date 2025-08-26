@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>ASHADEEP-IIT — DBMS </title>
+
+  <!-- Tailwind + Icons -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"/>
+
+  <!-- Alpine.js + jsPDF -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+
+  <!-- 🔹 Your local CSS + JS -->
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+
+  <style>[x-cloak]{display:none!important} html,body{height:100%}</style>
+</head>
+
+<body class="bg-gray-50" x-data="app()" x-cloak>
+
+<!-- LOGIN -->
+<div x-show="!loggedIn" class="fixed inset-0 flex items-center justify-center bg-sky-900/90 z-50">
+  <div class="bg-white rounded-xl shadow-xl p-6 w-96">
+    <div class="flex justify-center mb-4" x-show="logo"><img :src="logo" alt="School Logo" class="h-16 w-16 rounded-full object-cover"></div>
+    <h2 class="text-xl font-bold mb-4 text-center">Login to ASHADEEP-IIT</h2>
+    <label class="block mb-2 text-sm">Username
+      <input type="text" x-model.trim="loginForm.username" class="mt-1 w-full border rounded px-3 py-2"/>
+    </label>
+    <label class="block mb-4 text-sm">Password
+      <input type="password" x-model.trim="loginForm.password" class="mt-1 w-full border rounded px-3 py-2"/>
+    </label>
+    <button @click="attemptLogin()" class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">Login</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div x-show="loggedIn" class="min-h-screen flex">
+  <!-- Sidebar -->
+  <aside class="w-64 bg-blue-800 text-white p-5 hidden md:block">
+    <div class="flex items-center gap-2 font-bold text-lg mb-6">
+      <img x-show="logo" :src="logo" alt="School Logo" class="h-8 w-8 rounded-full object-cover">
+      <span>ASHADEEP-IIT</span>
+    </div>
+    <nav class="space-y-2">
+      <button @click="activeTab='students';currentFolder='';refreshFolders()" :class="activeTab==='students' ? 'bg-white/10' : 'hover:bg-white/5'" class="w-full text-left px-3 py-2 rounded inline-flex items-center gap-2"><i class="fa-solid fa-users"></i> Students</button>
+      <button @click="activeTab='materials';materialCurrentFolder=''" :class="activeTab==='materials' ? 'bg-white/10' : 'hover:bg-white/5'" class="w-full text-left px-3 py-2 rounded inline-flex items-center gap-2"><i class="fa-solid fa-file"></i> Materials</button>
+      <button @click="activeTab='settings'" :class="activeTab==='settings' ? 'bg-white/10' : 'hover:bg-white/5'" class="w-full text-left px-3 py-2 rounded inline-flex items-center gap-2"><i class="fa-solid fa-gear"></i> Settings</button>
+    </nav>
+  </aside>
+
+  <!-- Main -->
+  <main class="flex-1 p-6">
+    <!-- Topbar -->
+    <div class="flex items-center justify-between mb-6">
+      <div class="flex items-center gap-2 text-xl font-bold">
+        <img x-show="logo" :src="logo" alt="School Logo" class="h-8 w-8 rounded-full object-cover">
+        ASHADEEP-IIT <span class="text-sm text-gray-500">DBMS</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="text-sm text-gray-600">Logged in as <b x-text="auth.username"></b></div>
+        <button @click="logout()" class="px-3 py-1 bg-red-600 text-white rounded">Logout</button>
+      </div>
+    </div>
+
+    <!-- STUDENTS TAB -->
+    <section x-show="activeTab==='students'" class="space-y-4">
+      <div class="bg-white rounded shadow p-4">
+        <!-- Filters -->
+        <div class="flex flex-wrap gap-3 mb-4">
+          <select x-model="filter.standard" @change="currentFolder='';refreshFolders()" class="px-3 py-2 border rounded">
+            <option value="11">Standard 11</option>
+            <option value="12">Standard 12</option>
+          </select>
+          <select x-model="filter.group" @change="currentFolder='';refreshFolders()" class="px-3 py-2 border rounded">
+            <option value="A">Group A</option>
+            <option value="B">Group B</option>
+          </select>
+        </div>
+
+        <!-- Folders grid -->
+        <template x-if="!currentFolder">
+          <div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <template x-for="f in visibleFolders" :key="f">
+                <div @click="openFolder(f)" class="cursor-pointer p-4 bg-gray-100 rounded shadow hover:bg-gray-200 text-center">
+                  <i class="fa-solid fa-folder text-2xl text-yellow-600"></i>
+                  <div class="mt-2 font-semibold" x-text="f"></div>
+                </div>
+              </template>
+              <div x-show="visibleFolders.length===0" class="col-span-full text-center text-gray-500 py-8">No folders. Create from Settings → Student Folders.</div>
+            </div>
+          </div>
+        </template>
+
+        <!-- Inside folder -->
+        <template x-if="currentFolder">
+          <div>
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-lg font-bold">Folder: <span x-text="currentFolder"></span> <span class="text-sm text-gray-500">(Std <span x-text="filter.standard"></span> • Group <span x-text="filter.group"></span>)</span></h2>
+              <div class="flex gap-2">
+                <button @click="exportPDF()" class="px-3 py-2 bg-emerald-600 text-white rounded"><i class="fa-solid fa-file-pdf mr-2"></i>Export PDF</button>
+                <button @click="openForm()" class="px-3 py-2 bg-blue-600 text-white rounded"><i class="fa-solid fa-plus mr-2"></i>Add Student</button>
+                <button @click="currentFolder=''; refreshFolders();" class="px-3 py-2 border rounded">Back to Folders</button>
+              </div>
+            </div>
+
+            <div class="bg-white rounded shadow overflow-x-auto">
+              <table class="min-w-full">
+                <thead class="bg-gray-100 text-left text-sm">
+                  <tr>
+                    <th class="px-4 py-2">Roll No</th>
+                    <th class="px-4 py-2">GR No</th>
+                    <th class="px-4 py-2">Full Name</th>
+                    <th class="px-4 py-2">Contact No-1</th>
+                    <th class="px-4 py-2">Contact No-2</th>
+                    <th class="px-4 py-2" x-show="filter.standard==='11'">Std-10 %</th>
+                    <th class="px-4 py-2" x-show="filter.standard==='12'">Std-11 %</th>
+                    <th class="px-4 py-2">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template x-for="s in folderStudents" :key="s.id">
+                    <tr class="border-b hover:bg-gray-50">
+                      <td class="px-4 py-2" x-text="s.rollNumber"></td>
+                      <td class="px-4 py-2" x-text="s.grNumber"></td>
+                      <td class="px-4 py-2" x-text="s.fullName"></td>
+                      <td class="px-4 py-2" x-text="s.contact1"></td>
+                      <td class="px-4 py-2" x-text="s.contact2"></td>
+                      <td class="px-4 py-2" x-show="filter.standard==='11'" x-text="s.std10perc ?? ''"></td>
+                      <td class="px-4 py-2" x-show="filter.standard==='12'" x-text="s.std11perc ?? ''"></td>
+                      <td class="px-4 py-2">
+                        <button @click="editStudent(s)" class="text-blue-600 mr-2">Edit</button>
+                        <button @click="deleteStudent(s.id)" class="text-red-600">Delete</button>
+                      </td>
+                    </tr>
+                  </template>
+                  <tr x-show="folderStudents.length===0"><td colspan="8" class="py-6 text-center text-gray-500">No students.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </template>
+      </div>
+    </section>
+
+    <!-- MATERIALS TAB -->
+    <section x-show="activeTab==='materials'" class="space-y-4">
+      <div class="bg-white rounded shadow p-4">
+        <template x-if="!materialCurrentFolder">
+          <div>
+            <h2 class="text-lg font-bold mb-4">Material Folders</h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <template x-for="f in materialFolders" :key="f">
+                <div @click="openMaterialFolder(f)" class="cursor-pointer p-4 bg-gray-100 rounded shadow hover:bg-gray-200 text-center">
+                  <i class="fa-solid fa-folder text-2xl text-yellow-600"></i>
+                  <div class="mt-2 font-semibold" x-text="f"></div>
+                </div>
+              </template>
+              <div x-show="materialFolders.length===0" class="col-span-full text-center text-gray-500 py-8">No material folders. Create from Settings → Materials Folders.</div>
+            </div>
+          </div>
+        </template>
+
+        <template x-if="materialCurrentFolder">
+          <div>
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-lg font-bold">Folder: <span x-text="materialCurrentFolder"></span></h2>
+              <button @click="materialCurrentFolder=''" class="px-3 py-2 border rounded">Back to Folders</button>
+            </div>
+            <div class="mb-4">
+              <input type="file" multiple @change="uploadMaterial($event)" class="block"/>
+            </div>
+
+            <div class="bg-white rounded shadow overflow-x-auto">
+              <table class="min-w-full">
+                <thead class="bg-gray-100 text-left text-sm">
+                  <tr>
+                    <th class="px-4 py-2">File Name</th>
+                    <th class="px-4 py-2">Size</th>
+                    <th class="px-4 py-2">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template x-for="(m,i) in materialFiles[materialCurrentFolder]" :key="m.id">
+                    <tr class="border-b hover:bg-gray-50">
+                      <td class="px-4 py-2" x-text="m.name"></td>
+                      <td class="px-4 py-2" x-text="formatSize(m.size)"></td>
+                      <td class="px-4 py-2">
+                        <a :href="m.data" :download="m.name" class="text-green-600 mr-3">Download</a>
+                        <button @click="deleteMaterial(i)" class="text-red-600">Delete</button>
+                      </td>
+                    </tr>
+                  </template>
+                  <tr x-show="!materialFiles[materialCurrentFolder] || materialFiles[materialCurrentFolder].length===0"><td colspan="3" class="py-6 text-center text-gray-500">No files uploaded.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </template>
+      </div>
+    </section>
+
+    <!-- SETTINGS TAB -->
+    <section x-show="activeTab==='settings'" class="space-y-6">
+      <!-- Account + Logo -->
+      <div class="bg-white rounded shadow p-4 grid md:grid-cols-2 gap-6">
+        <div>
+          <h3 class="font-semibold mb-2 flex items-center gap-2"><i class="fa-solid fa-user-gear"></i> Account</h3>
+          <label class="block mb-2">Username
+            <input type="text" x-model.trim="auth.username" class="mt-1 w-full border px-3 py-2 rounded" />
+          </label>
+          <label class="block mb-2">Password
+            <input type="password" x-model.trim="auth.password" class="mt-1 w-full border px-3 py-2 rounded" />
+          </label>
+          <div class="flex gap-2 mt-2">
+            <button @click="saveAuth()" class="px-3 py-2 bg-blue-600 text-white rounded">Save</button>
+            <button @click="resetAuth()" class="px-3 py-2 border rounded">Reset to admin/admin</button>
+          </div>
+
+          <div class="mt-6">
+            <h4 class="font-semibold mb-2 flex items-center gap-2"><i class="fa-solid fa-image"></i> School Logo</h4>
+            <input type="file" accept="image/*" @change="uploadLogo($event)" class="block mb-2"/>
+            <input type="text" placeholder="or paste image URL" x-model.trim="logoUrlInput" class="w-full border rounded px-3 py-2 mb-2">
+            <div class="flex gap-2">
+              <button @click="saveLogoUrl()" class="px-3 py-2 bg-emerald-600 text-white rounded">Save Logo</button>
+              <button @click="clearLogo()" class="px-3 py-2 border rounded">Remove Logo</button>
+            </div>
+            <div class="mt-3" x-show="logo">
+              <div class="text-sm text-gray-500 mb-1">Preview</div>
+              <img :src="logo" class="h-16 w-16 rounded-full object-cover"/>
+            </div>
+          </div>
+        </div>
+
+        <!-- STUDENT FOLDERS MGMT -->
+        <div>
+          <h3 class="font-semibold mb-2 flex items-center gap-2"><i class="fa-solid fa-folder-tree"></i> Student Folders</h3>
+          <div class="flex gap-3 mb-3">
+            <select x-model="cfg.standard" @change="loadCfgFolders()" class="px-3 py-2 border rounded">
+              <option value="11">Standard 11</option>
+              <option value="12">Standard 12</option>
+            </select>
+            <select x-model="cfg.group" @change="loadCfgFolders()" class="px-3 py-2 border rounded">
+              <option value="A">Group A</option>
+              <option value="B">Group B</option>
+            </select>
+          </div>
+          <div class="bg-gray-50 rounded p-3 mb-3 max-h-60 overflow-auto border">
+            <template x-for="f in cfgFolders" :key="f">
+              <div class="flex items-center justify-between py-1">
+                <span class="font-medium" x-text="f"></span>
+                <div class="flex items-center gap-2">
+                  <button class="text-blue-600" @click="renameFolderPrompt(f)"><i class="fa-solid fa-pen"></i></button>
+                  <button class="text-red-600" @click="removeFolder(f)"><i class="fa-solid fa-trash"></i></button>
+                </div>
+              </div>
+            </template>
+            <div x-show="cfgFolders.length===0" class="text-sm text-gray-500">No folders yet.</div>
+          </div>
+          <div class="flex gap-2">
+            <input type="text" placeholder="New folder (e.g., M12/B7)" x-model.trim="newFolderName" class="flex-1 border rounded px-3 py-2"/>
+            <button @click="addFolder()" class="px-3 py-2 bg-blue-600 text-white rounded">Add</button>
+          </div>
+          <p class="text-xs text-gray-500 mt-2">Rename/Delete allowed only when folder is empty.</p>
+        </div>
+      </div>
+
+      <!-- MATERIAL FOLDERS MGMT -->
+      <div class="bg-white rounded shadow p-4">
+        <h3 class="font-semibold mb-2 flex items-center gap-2"><i class="fa-solid fa-folder"></i> Materials Folders</h3>
+        <div class="bg-gray-50 rounded p-3 mb-3 max-h-60 overflow-auto border">
+          <template x-for="f in materialFolders" :key="f">
+            <div class="flex items-center justify-between py-1">
+              <span class="font-medium" x-text="f"></span>
+              <div class="flex items-center gap-2">
+                <button class="text-blue-600" @click="renameMaterialFolder(f)"><i class="fa-solid fa-pen"></i></button>
+                <button class="text-red-600" @click="removeMaterialFolder(f)"><i class="fa-solid fa-trash"></i></button>
+              </div>
+            </div>
+          </template>
+          <div x-show="materialFolders.length===0" class="text-sm text-gray-500">No material folders yet.</div>
+        </div>
+        <div class="flex gap-2">
+          <input type="text" placeholder="New material folder" x-model.trim="newMaterialFolder" class="flex-1 border rounded px-3 py-2"/>
+          <button @click="addMaterialFolder()" class="px-3 py-2 bg-blue-600 text-white rounded">Add</button>
+        </div>
+        <p class="text-xs text-gray-500 mt-2">Delete allowed only when folder is empty.</p>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- STUDENT MODAL -->
+<div x-show="showForm" class="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
+  <div class="bg-white rounded-lg shadow-xl p-6 w-[680px] max-w-[95%]">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-bold" x-text="editing?'Edit Student':'Add Student'"></h3>
+      <button @click="closeForm()" class="text-gray-600"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <label class="block">Roll Number <input type="text" x-model.trim="form.rollNumber" class="mt-1 w-full border px-3 py-2 rounded"/></label>
+      <label class="block">GR Number <input type="text" x-model.trim="form.grNumber" class="mt-1 w-full border px-3 py-2 rounded"/></label>
+      <label class="block md:col-span-2">Full Name <input type="text" x-model.trim="form.fullName" class="mt-1 w-full border px-3 py-2 rounded"/></label>
+      <label class="block">Contact No-1 <input type="text" x-model.trim="form.contact1" class="mt-1 w-full border px-3 py-2 rounded" placeholder="e.g., 9876543210"/></label>
+      <label class="block">Contact No-2 <input type="text" x-model.trim="form.contact2" class="mt-1 w-full border px-3 py-2 rounded" placeholder="optional"/></label>
+      <label class="block" x-show="filter.standard==='11'">Std-10 Percentage <input type="number" min="0" max="100" step="0.01" x-model.number="form.std10perc" class="mt-1 w-full border px-3 py-2 rounded"/></label>
+      <label class="block" x-show="filter.standard==='12'">Std-11 Percentage <input type="number" min="0" max="100" step="0.01" x-model.number="form.std11perc" class="mt-1 w-full border px-3 py-2 rounded"/></label>
+    </div>
+
+    <div class="flex justify-end gap-2 mt-4">
+      <button @click="closeForm()" class="px-3 py-2 border rounded">Cancel</button>
+      <button @click="saveStudent()" class="px-3 py-2 bg-blue-600 text-white rounded">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('alpine:init',()=>{
+  Alpine.data('app',()=>({
+    // ===== STATE =====
+    loggedIn:false,
+    loginForm:{username:'',password:''},
+    auth:{username:'admin',password:'admin'},
+
+    // Students
+    students:[],
+    foldersMap:{},
+    visibleFolders:[],
+    folderStudents:[],
+    currentFolder:'',
+    filter:{standard:'11',group:'A'},
+    cfg:{standard:'11',group:'A'}, cfgFolders:[], newFolderName:'',
+
+    // Materials
+    materialFolders:[], materialFiles:{}, materialCurrentFolder:'', newMaterialFolder:'',
+
+    // UI
+    activeTab:'students', showForm:false, editing:false, form:{},
+    logo:null, logoUrlInput:'',
+
+    // Storage Keys
+    SKEY:'ashadeep_students_v5',
+    FKEY:'ashadeep_folders_v5',
+    AKEY:'ashadeep_auth_v5',
+    LKEY:'ashadeep_logo_v5',
+    MKEY:'ashadeep_materials_v1', // {folders:[], files:{folder:[{id,name,size,data}]}}
+
+    // ===== INIT =====
+    init(){
+      // Auth
+      try{ const a=localStorage.getItem(this.AKEY); if(a) this.auth=JSON.parse(a);}catch(e){}
+      // Students
+      try{ const s=localStorage.getItem(this.SKEY); if(s) this.students=JSON.parse(s);}catch(e){ this.students=[]; }
+      // Student folders
+      try{ const f=localStorage.getItem(this.FKEY); if(f) this.foldersMap=JSON.parse(f);}catch(e){ this.foldersMap={}; }
+      if(!this.foldersMap || Object.keys(this.foldersMap).length===0){ this.seedDefaultFolders(); }
+      // Materials
+      try{ const m=localStorage.getItem(this.MKEY); if(m){ const parsed=JSON.parse(m); this.materialFolders=parsed.folders||[]; this.materialFiles=parsed.files||{}; } }catch(e){}
+      // Logo
+      const l=localStorage.getItem(this.LKEY); if(l) this.logo=l;
+      // Hydrate
+      this.refreshFolders();
+      this.loadCfgFolders();
+    },
+
+    // ===== Helpers =====
+    key(std,grp){ return String(std)+String(grp); },
+    persistStudents(){ localStorage.setItem(this.SKEY, JSON.stringify(this.students)); },
+    persistFolders(){ localStorage.setItem(this.FKEY, JSON.stringify(this.foldersMap)); this.refreshFolders(); this.loadCfgFolders(); },
+    persistMaterials(){ localStorage.setItem(this.MKEY, JSON.stringify({folders:this.materialFolders, files:this.materialFiles})); },
+    saveAuth(){ localStorage.setItem(this.AKEY, JSON.stringify(this.auth)); alert('Saved'); },
+    resetAuth(){ this.auth={username:'admin',password:'admin'}; this.saveAuth(); },
+
+    // ===== Default Student Folders =====
+    seedDefaultFolders(){
+      this.foldersMap={ '11A':[], '11B':[], '12A':[], '12B':[] };
+      for(let i=1;i<=11;i++){ this.foldersMap['11A'].push('M'+i); this.foldersMap['12A'].push('M'+i); }
+      for(let i=1;i<=6;i++){ this.foldersMap['11B'].push('B'+i); this.foldersMap['12B'].push('B'+i); }
+      this.persistFolders();
+    },
+
+    // ===== Login =====
+    attemptLogin(){
+      if(this.loginForm.username===this.auth.username && this.loginForm.password===this.auth.password){ this.loggedIn=true; }
+      else { alert('Invalid credentials'); }
+    },
+    logout(){ this.loggedIn=false; this.currentFolder=''; this.materialCurrentFolder=''; },
+
+    // ===== Students: Folders + List =====
+    refreshFolders(){ const k=this.key(this.filter.standard,this.filter.group); this.visibleFolders=(this.foldersMap[k]||[]).slice(); },
+    openFolder(f){ this.currentFolder=f; this.loadFolder(); },
+    loadFolder(){ const std=this.filter.standard, grp=this.filter.group; this.folderStudents=this.students.filter(s=>s.folder===this.currentFolder && String(s.standard)===String(std) && s.group===grp); },
+
+    // ===== Students CRUD =====
+    openForm(){ this.editing=false; this.form=this.emptyForm(); this.showForm=true; },
+    closeForm(){ this.showForm=false; },
+    emptyForm(){ return { id:null, rollNumber:'', grNumber:'', fullName:'', contact1:'', contact2:'', std10perc:null, std11perc:null, standard:this.filter.standard, group:this.filter.group, folder:this.currentFolder }; },
+    validateForm(){
+      if(!this.form.rollNumber) return 'Roll Number required';
+      if(!this.form.grNumber) return 'GR Number required';
+      if(!this.form.fullName) return 'Full Name required';
+      if(!this.form.contact1) return 'Contact No-1 required';
+      if(this.filter.standard==='11' && (this.form.std10perc===null || this.form.std10perc==='')) return 'Std-10 % required for Std 11';
+      if(this.filter.standard==='12' && (this.form.std11perc===null || this.form.std11perc==='')) return 'Std-11 % required for Std 12';
+      return '';
+    },
+    saveStudent(){
+      const err=this.validateForm(); if(err){ alert(err); return; }
+      // lock context
+      this.form.standard=this.filter.standard; this.form.group=this.filter.group; this.form.folder=this.currentFolder;
+      if(this.filter.standard==='11'){ this.form.std11perc=null; }
+      if(this.filter.standard==='12'){ this.form.std10perc=null; }
+      if(this.editing){ const idx=this.students.findIndex(x=>x.id===this.form.id); if(idx>-1){ this.students[idx]=JSON.parse(JSON.stringify(this.form)); } }
+      else { this.form.id=Date.now(); this.students.push(JSON.parse(JSON.stringify(this.form))); }
+      this.persistStudents(); this.loadFolder(); this.showForm=false;
+    },
+    editStudent(s){ this.editing=true; this.form=JSON.parse(JSON.stringify(s)); this.showForm=true; },
+    deleteStudent(id){ if(confirm('Delete this student?')){ this.students=this.students.filter(s=>s.id!==id); this.persistStudents(); this.loadFolder(); } },
+
+    // ===== Students: PDF Export =====
+    async exportPDF(){
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ orientation:'p', unit:'pt', format:'a4' });
+      const pad=36;
+      // Header + logo
+      if(this.logo){ try{ const img=await this.toImage(this.logo); doc.addImage(img,'PNG',pad,pad,40,40);}catch(e){} }
+      doc.setFontSize(16); doc.text('ASHADEEP-IIT — Students List', pad+50, pad+18);
+      doc.setFontSize(11); doc.text(`Standard ${this.filter.standard} • Group ${this.filter.group} • Folder ${this.currentFolder}`, pad+50, pad+36);
+      doc.setLineWidth(0.5); doc.line(pad, pad+52, doc.internal.pageSize.getWidth()-pad, pad+52);
+      const is11=this.filter.standard==='11';
+      const head = is11 ? [['Roll No','GR No','Full Name','Contact 1','Contact 2','Std-10 %']] : [['Roll No','GR No','Full Name','Contact 1','Contact 2','Std-11 %']];
+      const rows = this.folderStudents.map(s=>[ s.rollNumber||'', s.grNumber||'', s.fullName||'', s.contact1||'', s.contact2||'', is11?(s.std10perc??''):(s.std11perc??'') ]);
+      doc.autoTable({ startY: pad+64, head, body: rows, styles:{fontSize:10, cellPadding:4}, headStyles:{ fillColor:[230,230,230] } });
+      doc.save(`Std${this.filter.standard}_Group${this.filter.group}_${this.currentFolder}.pdf`);
+    },
+    toImage(src){ return new Promise((res,rej)=>{ const i=new Image(); i.crossOrigin='anonymous'; i.onload=()=>{ const c=document.createElement('canvas'); c.width=i.width; c.height=i.height; const x=c.getContext('2d'); x.drawImage(i,0,0); res(c.toDataURL('image/png')); }; i.onerror=rej; i.src=src; }); },
+
+    // ===== Settings: Student Folders MGMT =====
+    loadCfgFolders(){ const k=this.key(this.cfg.standard,this.cfg.group); this.cfgFolders=(this.foldersMap[k]||[]).slice(); },
+    addFolder(){
+      const name=(this.newFolderName||'').toUpperCase().trim();
+      if(!name) return alert('Folder name required');
+      if(!/^[-A-Z0-9]+$/.test(name)) return alert('Use letters/numbers (e.g., M12, B7)');
+      const k=this.key(this.cfg.standard,this.cfg.group); const arr=this.foldersMap[k]||[];
+      if(arr.includes(name)) return alert('Folder already exists');
+      arr.push(name); arr.sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+      this.foldersMap[k]=arr; this.newFolderName=''; this.persistFolders();
+    },
+    removeFolder(name){
+      const std=this.cfg.standard, grp=this.cfg.group;
+      const hasStudents=this.students.some(s=>String(s.standard)===String(std) && s.group===grp && s.folder===name);
+      if(hasStudents) return alert('Folder not empty. Delete/Move students first.');
+      const k=this.key(std,grp); this.foldersMap[k]=(this.foldersMap[k]||[]).filter(f=>f!==name); this.persistFolders();
+    },
+    renameFolderPrompt(oldName){
+      const std=this.cfg.standard, grp=this.cfg.group;
+      const hasStudents=this.students.some(s=>String(s.standard)===String(std) && s.group===grp && s.folder===oldName);
+      if(hasStudents) return alert('Rename not allowed: folder has students');
+      const nn=prompt('New folder name:', oldName); if(!nn) return; const name=nn.toUpperCase().trim();
+      if(!/^[-A-Z0-9]+$/.test(name)) return alert('Use letters/numbers only');
+      const k=this.key(std,grp); const arr=this.foldersMap[k]||[]; if(arr.includes(name)) return alert('Folder with this name already exists');
+      this.foldersMap[k]=arr.map(f=>f===oldName?name:f); this.persistFolders();
+    },
+
+    // ===== Materials logic =====
+    openMaterialFolder(f){ this.materialCurrentFolder=f; if(!this.materialFiles[f]) this.materialFiles[f]=[]; },
+    uploadMaterial(e){ const files=[...e.target.files]; if(!this.materialCurrentFolder) return; files.forEach(file=>{ const reader=new FileReader(); reader.onload=()=>{ this.materialFiles[this.materialCurrentFolder].push({id:Date.now()+Math.random(), name:file.name, size:file.size, data:reader.result}); this.persistMaterials(); }; reader.readAsDataURL(file); }); e.target.value=''; },
+    deleteMaterial(i){ if(!this.materialCurrentFolder) return; if(confirm('Delete this file?')){ this.materialFiles[this.materialCurrentFolder].splice(i,1); this.persistMaterials(); } },
+
+    addMaterialFolder(){ const name=(this.newMaterialFolder||'').trim(); if(!name) return alert('Folder name required'); if(this.materialFolders.includes(name)) return alert('Folder exists'); this.materialFolders.push(name); this.materialFolders.sort((a,b)=>a.localeCompare(b,undefined,{numeric:true})); this.materialFiles[name]=[]; this.newMaterialFolder=''; this.persistMaterials(); },
+    removeMaterialFolder(f){ if((this.materialFiles[f]||[]).length>0) return alert('Folder not empty'); this.materialFolders=this.materialFolders.filter(x=>x!==f); delete this.materialFiles[f]; this.persistMaterials(); },
+    renameMaterialFolder(f){ const nn=prompt('New folder name',f); if(!nn) return; const name=nn.trim(); if(!name) return; if(this.materialFolders.includes(name)) return alert('Already exists'); this.materialFolders=this.materialFolders.map(x=>x===f?name:x); this.materialFiles[name]=this.materialFiles[f]||[]; delete this.materialFiles[f]; this.persistMaterials(); },
+
+    // ===== Logo =====
+    uploadLogo(e){ const file=e.target.files?.[0]; if(!file) return; const reader=new FileReader(); reader.onload=()=>{ this.logo=reader.result; localStorage.setItem(this.LKEY,this.logo); }; reader.readAsDataURL(file); },
+    saveLogoUrl(){ if(!this.logoUrlInput) return alert('Paste image URL'); this.logo=this.logoUrlInput; localStorage.setItem(this.LKEY,this.logo); this.logoUrlInput=''; },
+    clearLogo(){ this.logo=null; localStorage.removeItem(this.LKEY); },
+
+    // ===== Utils =====
+    formatSize(s){ if(!s) return ''; const kb=s/1024; return kb<1024?kb.toFixed(1)+' KB':(kb/1024).toFixed(1)+' MB'; },
+  }));
+});
+</script>
+</body>
+</html>
